@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Net.Mime;
 
 namespace Tetris {
     public static class UserSettings {
@@ -11,6 +12,9 @@ namespace Tetris {
         public static float SDC { get; set; } //Soft Drop Factor: the factor with which soft drop changes the gravity speed (measured in multiples, for example 10x)
         public static int boardWidth { get; set; } //The width of the board
         public static int boardHeight { get; set; } //The height of the board
+
+        
+
     }
 
     public static class GameState {
@@ -36,6 +40,14 @@ namespace Tetris {
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
 
+        public Texture2D redTex { get; set; }
+        public Texture2D yellowTex { get; set; }
+        public Texture2D orangeTex { get; set; }
+        public Texture2D greenTex { get; set; }
+        public Texture2D blueTex { get; set; }
+        public Texture2D lightBlueTex { get; set; }
+        public Texture2D purpleTex { get; set; }
+
         public Game1() {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
@@ -44,11 +56,22 @@ namespace Tetris {
 
         protected override void Initialize() {
             // TODO: Add your initialization logic here
+
+
+
             base.Initialize();
         }
 
         protected override void LoadContent() {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
+
+            redTex = Content.Load<Texture2D>("RedTile");
+            greenTex = Content.Load<Texture2D>("GreenTile");
+            blueTex = Content.Load<Texture2D>("BlueTile");
+            lightBlueTex = Content.Load<Texture2D>("LightBlueTile");
+            purpleTex = Content.Load<Texture2D>("PurpleTile");
+            yellowTex = Content.Load<Texture2D>("YellowTile");
+            orangeTex = Content.Load<Texture2D>("OrangeTile");
 
             // TODO: use this.Content to load your game content here
         }
@@ -74,8 +97,8 @@ namespace Tetris {
 
     public static class Board {
         public static Piece activePiece;
-        public static Rectangle[,] rBoard = new Rectangle[UserSettings.boardWidth, UserSettings.boardHeight + 1];
-        public static Texture2D[,]? tBoard = new Texture2D[UserSettings.boardWidth, UserSettings.boardHeight + 1];
+        public static Rectangle[,] rBoard = new Rectangle[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of rectangles
+        public static Texture2D[,]? tBoard = new Texture2D[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of texture2ds
         public static bool[,] bBoard = new bool[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of bools
 
         static Board() {
@@ -90,6 +113,20 @@ namespace Tetris {
         public static void CheckLines() {
             throw new System.NotImplementedException();
             
+        }
+
+        public static void SetActive(Piece piece, Texture2D r, Texture2D b, Texture2D lb, Texture2D o, Texture2D y, Texture2D p, Texture2D g) { // Add piece here
+            switch (piece) {
+                case Line l:
+                    foreach(Mino mino in l.minos) {
+                        mino.texture = lb;
+                    }
+                    break;
+                default:
+                    break;
+
+            }
+            activePiece = piece;
         }
     
     }
@@ -110,7 +147,7 @@ namespace Tetris {
             Right,
         }
 
-        public void Move(, GameTime gameTime) {
+        public void Move(GameTime gameTime) {
             KeyboardState state = Keyboard.GetState();
             
             //Change to whatever users input keys are
@@ -243,17 +280,10 @@ namespace Tetris {
         public Line() {
             //Initalize all 4 minos without a for loop for some reason
 
-            Mino mino1 = new Mino();
-            minos[0] = mino1;
-
-            Mino mino2 = new Mino();
-            minos[1] = mino2;
-
-            Mino mino3 = new Mino();
-            minos[2] = mino3;
-
-            Mino mino4 = new Mino();
-            minos[3] = mino4;
+            for(int i = 0; i < 4; i++) {
+                Mino m = new Mino();
+                minos[i] = m;
+            }
         }
 
         void Spawn() {
@@ -269,7 +299,6 @@ namespace Tetris {
         public Rectangle texRect;
 
         public void SetRectangle() {
-            throw new System.NotImplementedException();
         }
     }
 }

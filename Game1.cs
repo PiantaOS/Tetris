@@ -14,7 +14,10 @@ namespace Tetris {
         public static int boardHeight { get; set; } //The height of the board
 
         
-
+        static UserSettings() {
+            boardWidth = 10;
+            boardHeight = 20;
+        }
     }
 
     public static class GameState {
@@ -40,13 +43,7 @@ namespace Tetris {
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
 
-        public Texture2D redTex { get; set; }
-        public Texture2D yellowTex { get; set; }
-        public Texture2D orangeTex { get; set; }
-        public Texture2D greenTex { get; set; }
-        public Texture2D blueTex { get; set; }
-        public Texture2D lightBlueTex { get; set; }
-        public Texture2D purpleTex { get; set; }
+        private Texture2D boardTex;
 
         public Game1() {
             _graphics = new GraphicsDeviceManager(this);
@@ -59,22 +56,23 @@ namespace Tetris {
         protected override void Initialize() {
             // TODO: Add your initialization logic here
             
-
+            
             base.Initialize();
         }
 
         protected override void LoadContent() {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
-            Board.redTex = redTex = Content.Load<Texture2D>("RedTile");
-            Board.blueTex = blueTex = Content.Load<Texture2D>("BlueTile");
-            Board.greenTex = greenTex = Content.Load<Texture2D>("GreenTile");
-            Board.lightBlueTex = lightBlueTex = Content.Load<Texture2D>("LightBlueTile");
-            Board.yellowTex = yellowTex = Content.Load<Texture2D>("YellowTile");
-            Board.purpleTex = purpleTex = Content.Load<Texture2D>("PurpleTile");
-            Board.orangeTex = orangeTex = Content.Load<Texture2D>("OrangeTile");
+            Board.redTex = Content.Load<Texture2D>("RedTile");
+            Board.blueTex = Content.Load<Texture2D>("BlueTile");
+            Board.greenTex = Content.Load<Texture2D>("GreenTile");
+            Board.lightBlueTex = Content.Load<Texture2D>("LightBlueTile");
+            Board.yellowTex = Content.Load<Texture2D>("YellowTile");
+            Board.purpleTex = Content.Load<Texture2D>("PurpleTile");
+            Board.orangeTex = Content.Load<Texture2D>("OrangeTile");
+            boardTex = Content.Load<Texture2D>("Board");
 
-            Piece l = new Line();
-            Board.SetActive(l);
+            Line l = new Line();
+            l.Spawn();
 
 
             // TODO: use this.Content to load your game content here
@@ -97,7 +95,6 @@ namespace Tetris {
 
             foreach(Mino mino in Board.activePiece.minos) {
                 mino.SetRectangle();
-                Console.WriteLine(mino.texture==null);
                 _spriteBatch.Draw(mino.texture, mino.texRect, Color.White);
             }
 
@@ -155,15 +152,15 @@ namespace Tetris {
         public Mino[] minos = new Mino[4];
 
         bool dasActive;
-        Orientation orientation = Orientation.Up;
+        Orientation orientation = Orientation.ZERO;
 
         bool gFinished;
         bool touchingGround = false;
         public enum Orientation {
-            Up, 
-            Down, 
-            Left, 
-            Right,
+            ZERO, 
+            RIGHT, 
+            TWO, 
+            LEFT
         }
 
         public void Move(GameTime gameTime) {
@@ -207,6 +204,7 @@ namespace Tetris {
                             break;
                         }
 
+                        Console.WriteLine(Board.bBoard[0, 0]);
                         if (Board.bBoard[(int)(mino.position.X + 1), (int)mino.position.Y]) {
                             canMoveRight = false;
                             break;
@@ -297,7 +295,7 @@ namespace Tetris {
 
     public class Line : Piece { 
         public Line() {
-            //Initalize all 4 minos without a for loop for some reason
+            //Initalize all 4 minos
 
             for(int i = 0; i < 4; i++) {
                 Mino m = new Mino();
@@ -305,11 +303,14 @@ namespace Tetris {
             }
         }
 
-        void Spawn() {
+        public void Spawn() {
             minos[0].position = new Vector2(3, 19);
             minos[1].position = new Vector2(4, 19);
             minos[2].position = new Vector2(5, 19);
             minos[3].position = new Vector2(6, 19);
+
+
+            Board.SetActive(this);
         }
     }
     public class Mino {
@@ -318,10 +319,8 @@ namespace Tetris {
         public Rectangle texRect;
 
         public void SetRectangle() {
-
             //
-            Rectangle rect = new Rectangle((int)position.X * 10, (int)position.Y * 10, 20, 20);
-
+            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y + 10, 20, 20);
             texRect = rect;
         }
     }

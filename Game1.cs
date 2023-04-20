@@ -52,26 +52,30 @@ namespace Tetris {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
+
+
         }
 
         protected override void Initialize() {
             // TODO: Add your initialization logic here
-
-
+            
 
             base.Initialize();
         }
 
         protected override void LoadContent() {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
+            Board.redTex = redTex = Content.Load<Texture2D>("RedTile");
+            Board.blueTex = blueTex = Content.Load<Texture2D>("BlueTile");
+            Board.greenTex = greenTex = Content.Load<Texture2D>("GreenTile");
+            Board.lightBlueTex = lightBlueTex = Content.Load<Texture2D>("LightBlueTile");
+            Board.yellowTex = yellowTex = Content.Load<Texture2D>("YellowTile");
+            Board.purpleTex = purpleTex = Content.Load<Texture2D>("PurpleTile");
+            Board.orangeTex = orangeTex = Content.Load<Texture2D>("OrangeTile");
 
-            redTex = Content.Load<Texture2D>("RedTile");
-            greenTex = Content.Load<Texture2D>("GreenTile");
-            blueTex = Content.Load<Texture2D>("BlueTile");
-            lightBlueTex = Content.Load<Texture2D>("LightBlueTile");
-            purpleTex = Content.Load<Texture2D>("PurpleTile");
-            yellowTex = Content.Load<Texture2D>("YellowTile");
-            orangeTex = Content.Load<Texture2D>("OrangeTile");
+            Piece l = new Line();
+            Board.SetActive(l);
+
 
             // TODO: use this.Content to load your game content here
         }
@@ -80,7 +84,8 @@ namespace Tetris {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            // TODO: Add your update logic here
+            Board.activePiece.Move(gameTime);
+
             base.Update(gameTime);
         }
 
@@ -88,7 +93,15 @@ namespace Tetris {
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
             // TODO: Add your drawing code here
-            
+            _spriteBatch.Begin();
+
+            foreach(Mino mino in Board.activePiece.minos) {
+                mino.SetRectangle();
+                Console.WriteLine(mino.texture==null);
+                _spriteBatch.Draw(mino.texture, mino.texRect, Color.White);
+            }
+
+            _spriteBatch.End();
             base.Draw(gameTime);
         }
 
@@ -100,7 +113,13 @@ namespace Tetris {
         public static Rectangle[,] rBoard = new Rectangle[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of rectangles
         public static Texture2D[,]? tBoard = new Texture2D[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of texture2ds
         public static bool[,] bBoard = new bool[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of bools
-
+        public static Texture2D redTex;
+        public static Texture2D greenTex;
+        public static Texture2D blueTex;
+        public static Texture2D lightBlueTex;
+        public static Texture2D purpleTex;
+        public static Texture2D yellowTex;
+        public static Texture2D orangeTex;
         static Board() {
             for(int i = 0; i < UserSettings.boardWidth; i++) {
                 for(int j = 0; j < UserSettings.boardHeight + 1; j++) {
@@ -115,11 +134,11 @@ namespace Tetris {
             
         }
 
-        public static void SetActive(Piece piece, Texture2D r, Texture2D b, Texture2D lb, Texture2D o, Texture2D y, Texture2D p, Texture2D g) { // Add piece here
+        public static void SetActive(Piece piece) { // Add piece here
             switch (piece) {
                 case Line l:
                     foreach(Mino mino in l.minos) {
-                        mino.texture = lb;
+                        mino.texture = lightBlueTex;
                     }
                     break;
                 default:
@@ -299,6 +318,11 @@ namespace Tetris {
         public Rectangle texRect;
 
         public void SetRectangle() {
+
+            //
+            Rectangle rect = new Rectangle((int)position.X * 10, (int)position.Y * 10, 20, 20);
+
+            texRect = rect;
         }
     }
 }

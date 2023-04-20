@@ -3,6 +3,8 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Net.Mime;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Tetris {
     public static class UserSettings {
@@ -62,6 +64,7 @@ namespace Tetris {
 
         protected override void LoadContent() {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
+            boardTex = Content.Load<Texture2D>("Board");
             Board.redTex = Content.Load<Texture2D>("RedTile");
             Board.blueTex = Content.Load<Texture2D>("BlueTile");
             Board.greenTex = Content.Load<Texture2D>("GreenTile");
@@ -69,7 +72,6 @@ namespace Tetris {
             Board.yellowTex = Content.Load<Texture2D>("YellowTile");
             Board.purpleTex = Content.Load<Texture2D>("PurpleTile");
             Board.orangeTex = Content.Load<Texture2D>("OrangeTile");
-            boardTex = Content.Load<Texture2D>("Board");
 
             Line l = new Line();
             l.Spawn();
@@ -82,7 +84,10 @@ namespace Tetris {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            Board.activePiece.Move(gameTime);
+            GameTimeWrapper.gameTime = gameTime;
+            GameTimeWrapper.gameTime.TotalGameTime = gameTime.TotalGameTime;
+
+            Board.activePiece.Move();
 
             base.Update(gameTime);
         }
@@ -92,6 +97,10 @@ namespace Tetris {
 
             // TODO: Add your drawing code here
             _spriteBatch.Begin();
+
+            Rectangle destRect = new Rectangle(300, 300, 80, 160);
+
+            _spriteBatch.Draw(boardTex, destRect, Color.White);
 
             foreach(Mino mino in Board.activePiece.minos) {
                 mino.SetRectangle();
@@ -147,6 +156,8 @@ namespace Tetris {
     
     }
 
+    public static class GameTimeWrapper { public static GameTime gameTime; }
+
     
     public abstract class Piece {
         public Mino[] minos = new Mino[4];
@@ -154,8 +165,11 @@ namespace Tetris {
         bool dasActive;
         Orientation orientation = Orientation.ZERO;
 
-        bool gFinished;
+        bool gFinished = true;
         bool touchingGround = false;
+
+        int downMultiplier = 1;
+
         public enum Orientation {
             ZERO, 
             RIGHT, 
@@ -163,11 +177,10 @@ namespace Tetris {
             LEFT
         }
 
-        public void Move(GameTime gameTime) {
+        public void Move() {
             KeyboardState state = Keyboard.GetState();
             
             //Change to whatever users input keys are
-
             if (state.IsKeyDown(Keys.A)) {
                 if (!dasActive) {
                     bool canMoveLeft = true;
@@ -204,7 +217,6 @@ namespace Tetris {
                             break;
                         }
 
-                        Console.WriteLine(Board.bBoard[0, 0]);
                         if (Board.bBoard[(int)(mino.position.X + 1), (int)mino.position.Y]) {
                             canMoveRight = false;
                             break;
@@ -222,12 +234,12 @@ namespace Tetris {
             if (state.IsKeyDown(Keys.S)) {
                 bool canMoveDown = true;
                 foreach(Mino mino in minos) { 
-                    if((int)mino.position.Y - 1 < 0) {
+                    if((int)mino.position.Y + 1 > UserSettings.boardHeight) {
                         canMoveDown = false;
                         break;
                     }
 
-                    if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y - 1]) {
+                    if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y + 1]) {
                         canMoveDown = false;
                         break;
                     }
@@ -235,24 +247,23 @@ namespace Tetris {
                 }
 
                 if (canMoveDown) {
-                    foreach (Mino mino in minos) {
-                        mino.position.Y--;
-                    }
-
                     //Reset gravity timer
-                    runNextFrame = false;
+                    downMultiplier = 25;
+                }
+                else {
+                    downMultiplier = 1;
                 }
             }
 
             //Gravity timer stuff here
 
             foreach (Mino mino in minos) {
-                if ((int)mino.position.Y - 1 < 0) {
+                if ((int)mino.position.Y + 1 > UserSettings.boardHeight) {
                     touchingGround = true;
                     break;
                 }
 
-                if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y - 1]) {
+                if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y + 1]) {
                     touchingGround = true;
                     break;
                 }
@@ -260,35 +271,30 @@ namespace Tetris {
             if (!touchingGround) {
                 if (gFinished) {
                     foreach (Mino mino in minos) {
-                        mino.position.Y--;
+                        mino.position.Y++;
                     }
-                    runNextFrame = true;
-                    Wait(GameState.gravity / GameState.gravitySpeed, gameTime);
+                    Console.WriteLine("Gravity Tick");
+
+                    //https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
+                    Thread t = new Thread(() => Wait(GameState.gravity / GameState.gravitySpeed / downMultiplier, ref gFinished));
+                    t.Start();
                 }
             }
         }
-        bool startedWait = false;
-        bool runNextFrame = true;
-        TimeSpan startTime;
-        public void Wait(float milliseconds, GameTime gameTime) {
-            if (runNextFrame) {
-                TimeSpan millisecondsTS = TimeSpan.FromMilliseconds(milliseconds);
-                gFinished = false;
-                if (!startedWait) {
-                    startTime = TimeSpan.Zero;
-                    startedWait = true;
-                }
-                else {
-                    if (startTime + millisecondsTS < gameTime.TotalGameTime) {
-                        gFinished = true;
-                        startedWait = false;
-                    }
-                    else {
-                        Wait(milliseconds, gameTime);
-                    }
-                }
+
+        
+        public static void Wait(float milliseconds, ref bool done) {
+
+            TimeSpan startTime = GameTimeWrapper.gameTime.TotalGameTime;
+            TimeSpan timeWait = TimeSpan.FromMilliseconds(milliseconds);
+            done = false;
+
+            while(startTime + timeWait > GameTimeWrapper.gameTime.TotalGameTime) {
+                //Wait until time has elapsed
             }
+
             
+            done = true;
         }
 
     }
@@ -304,10 +310,10 @@ namespace Tetris {
         }
 
         public void Spawn() {
-            minos[0].position = new Vector2(3, 19);
-            minos[1].position = new Vector2(4, 19);
-            minos[2].position = new Vector2(5, 19);
-            minos[3].position = new Vector2(6, 19);
+            minos[0].position = new Vector2(3, 0);
+            minos[1].position = new Vector2(4, 0);
+            minos[2].position = new Vector2(5, 0);
+            minos[3].position = new Vector2(6, 0);
 
 
             Board.SetActive(this);
@@ -320,7 +326,7 @@ namespace Tetris {
 
         public void SetRectangle() {
             //
-            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y + 10, 20, 20);
+            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
             texRect = rect;
         }
     }

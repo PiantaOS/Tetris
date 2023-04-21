@@ -23,6 +23,8 @@ namespace Tetris {
     Holding
     Bag System
 
+    Player Input
+
     REFACTOR
     */
 
@@ -36,7 +38,12 @@ namespace Tetris {
     https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
     */
 
-
+    public enum Orientation {
+        ZERO,
+        RIGHT,
+        TWO,
+        LEFT
+    }
     public static class UserSettings {
         public static float DAS { get; set; } //Delayed Auto Shift: the time between the initial keypress and the start of its automatic repeat movement, measured in frames (or milliseconds)
         public static float ARR { get; set; } //Automatic Repeat Rate: the speed at which tetrominoes move when holding down movement keys, measured in frames per movement (or milliseconds)
@@ -120,6 +127,7 @@ namespace Tetris {
             GameTimeWrapper.gameTime = gameTime;
             GameTimeWrapper.gameTime.TotalGameTime = gameTime.TotalGameTime;
 
+            Board.activePiece.Rotate();
             Board.activePiece.Move();
 
             base.Update(gameTime);
@@ -140,6 +148,7 @@ namespace Tetris {
                 _spriteBatch.Draw(mino.texture, mino.texRect, Color.White);
             }
 
+
             _spriteBatch.End();
             base.Draw(gameTime);
         }
@@ -148,10 +157,34 @@ namespace Tetris {
     }
 
     public static class Board {
+
+        /* {
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {false, false, false, false, false, false, false, false, false, false },
+            {true , true , true , true , true , true , true , true , false, true },
+            {true , true , true , true , true , true , true , true , false, true },
+            {true , true , true , true , true , true , true , true , false, true },
+            {true , true , true , true , true , true , true , true , false, true },
+            {true , true , true , true , false, false, false, false, false, true },
+            {true , true , true , true , false, true , true , true , false, true },
+            {true , true , true , true , false, true , true , true , false, true },
+            {true , true , true , true , false, true , true , true , false, true },
+            {true , false, false, false, false, true , true , true , false, true }};
+        */
         public static Piece activePiece;
         public static Rectangle[,] rBoard = new Rectangle[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of rectangles
         public static Texture2D[,]? tBoard = new Texture2D[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of texture2ds
-        public static bool[,] bBoard = new bool[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of bools
+        public static bool[,] bBoard = new bool[UserSettings.boardWidth, UserSettings.boardHeight + 1];  //Version of the board comprised of bools
         public static Texture2D redTex;
         public static Texture2D greenTex;
         public static Texture2D blueTex;
@@ -167,6 +200,8 @@ namespace Tetris {
                     bBoard[i, j] = false;
                 }
             }
+
+            
         }
         public static void CheckLines() {
             throw new System.NotImplementedException();
@@ -191,10 +226,11 @@ namespace Tetris {
 
     public static class GameTimeWrapper { public static GameTime gameTime; }
 
-
     public abstract class Piece {
 
         //Most of these variables are boilerplate, refactor later
+        Dictionary<string, Orientation> turnMap = new Dictionary<string, Orientation>();
+
 
         public Mino[] minos = new Mino[4];
 
@@ -212,12 +248,17 @@ namespace Tetris {
 
         bool arrReady = true;
 
-        public enum Orientation {
-            ZERO,
-            RIGHT,
-            TWO,
-            LEFT
+        public Piece() {
+            turnMap.Add("ZERO.Right", Orientation.RIGHT);
+            turnMap.Add("ZERO.Left", Orientation.LEFT);
+            turnMap.Add("RIGHT.Right", Orientation.TWO);
+            turnMap.Add("RIGHT.Left", Orientation.ZERO);
+            turnMap.Add("TWO.Right", Orientation.LEFT);
+            turnMap.Add("TWO.Left", Orientation.RIGHT);
+            turnMap.Add("LEFT.Right", Orientation.ZERO);
+            turnMap.Add("LEFT.Left", Orientation.TWO);
         }
+        
 
         public void Move() {
             KeyboardState state = Keyboard.GetState();
@@ -288,7 +329,7 @@ namespace Tetris {
                     dasThreads[1].Interrupt();
                     dasThreads[1] = null;
                 }
-                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) { //
+                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) { 
                     dasThreads[2].Interrupt();
                     dasThreads[2] = null;
                 }
@@ -424,11 +465,27 @@ namespace Tetris {
             }
 
         }
+
+        public virtual void Rotate() {
+            KeyboardState state = Keyboard.GetState();
+
+            if (state.IsKeyDown(Keys.E)) {
+                RightRotation();
+            }
+            void RightRotation() {
+                Orientation targetOrientation;
+                if(turnMap.TryGetValue(orientation.ToString() + ".Right", out targetOrientation)) {
+                    
+                    Console.WriteLine(targetOrientation);
+                }
+                else {
+                }
+            }
+        }
     }
         public class Line : Piece {
             public Line() {
                 //Initalize all 4 minos
-
                 for (int i = 0; i < 4; i++) {
                     Mino m = new Mino();
                     minos[i] = m;

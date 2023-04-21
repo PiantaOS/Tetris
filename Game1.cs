@@ -2,11 +2,41 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.SymbolStore;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Tetris {
+
+
+    /* 
+    CURRENT PROBLEMS / THINGS TO WORK ON
+
+    Soft dropping
+    Hard Dropping
+    Ghost display
+    Lock Delay - https://tetris.wiki/Lock_delay
+    Make pieces/board look nicer
+    Rotation - https://tetris.wiki/Super_Rotation_System
+    Holding
+    Bag System
+
+    REFACTOR
+    */
+
+
+
+
+
+    /*
+    VERY VERY SPECIAL THANKS
+    https://stackoverflow.com/questions/7448589/interrupt-a-sleeping-thread - MobDev
+    https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
+    */
+
+
     public static class UserSettings {
         public static float DAS { get; set; } //Delayed Auto Shift: the time between the initial keypress and the start of its automatic repeat movement, measured in frames (or milliseconds)
         public static float ARR { get; set; } //Automatic Repeat Rate: the speed at which tetrominoes move when holding down movement keys, measured in frames per movement (or milliseconds)
@@ -15,10 +45,13 @@ namespace Tetris {
         public static int boardWidth { get; set; } //The width of the board
         public static int boardHeight { get; set; } //The height of the board
 
-        
+
         static UserSettings() {
             boardWidth = 10;
             boardHeight = 20;
+
+            DAS = 133; //ms
+            ARR = 10; //ms
         }
     }
 
@@ -57,8 +90,8 @@ namespace Tetris {
 
         protected override void Initialize() {
             // TODO: Add your initialization logic here
-            
-            
+
+
             base.Initialize();
         }
 
@@ -98,11 +131,11 @@ namespace Tetris {
             // TODO: Add your drawing code here
             _spriteBatch.Begin();
 
-            Rectangle destRect = new Rectangle(300, 300, 80, 160);
+            Rectangle destRect = new Rectangle(300, 30, 200, 400);
 
-            _spriteBatch.Draw(boardTex, destRect, Color.White);
+            _spriteBatch.Draw(boardTex, destRect, Color.Gray);
 
-            foreach(Mino mino in Board.activePiece.minos) {
+            foreach (Mino mino in Board.activePiece.minos) {
                 mino.SetRectangle();
                 _spriteBatch.Draw(mino.texture, mino.texRect, Color.White);
             }
@@ -111,7 +144,7 @@ namespace Tetris {
             base.Draw(gameTime);
         }
 
-        
+
     }
 
     public static class Board {
@@ -127,8 +160,8 @@ namespace Tetris {
         public static Texture2D yellowTex;
         public static Texture2D orangeTex;
         static Board() {
-            for(int i = 0; i < UserSettings.boardWidth; i++) {
-                for(int j = 0; j < UserSettings.boardHeight + 1; j++) {
+            for (int i = 0; i < UserSettings.boardWidth; i++) {
+                for (int j = 0; j < UserSettings.boardHeight + 1; j++) {
                     rBoard[i, j] = new Rectangle();
                     tBoard[i, j] = null;
                     bBoard[i, j] = false;
@@ -137,13 +170,13 @@ namespace Tetris {
         }
         public static void CheckLines() {
             throw new System.NotImplementedException();
-            
+
         }
 
         public static void SetActive(Piece piece) { // Add piece here
             switch (piece) {
                 case Line l:
-                    foreach(Mino mino in l.minos) {
+                    foreach (Mino mino in l.minos) {
                         mino.texture = lightBlueTex;
                     }
                     break;
@@ -153,16 +186,20 @@ namespace Tetris {
             }
             activePiece = piece;
         }
-    
+
     }
 
     public static class GameTimeWrapper { public static GameTime gameTime; }
 
-    
+
     public abstract class Piece {
+
+        //Most of these variables are boilerplate, refactor later
+
         public Mino[] minos = new Mino[4];
 
         bool dasActive;
+        bool arrActive;
         Orientation orientation = Orientation.ZERO;
 
         bool gFinished = true;
@@ -170,22 +207,26 @@ namespace Tetris {
 
         int downMultiplier = 1;
 
+        Thread[]? dasThreads = new Thread[] { null, null, null, null }; //0, 1 for left das and arr, 2, 3, for right das and arr
+
+
+        bool arrReady = true;
+
         public enum Orientation {
-            ZERO, 
-            RIGHT, 
-            TWO, 
+            ZERO,
+            RIGHT,
+            TWO,
             LEFT
         }
 
         public void Move() {
             KeyboardState state = Keyboard.GetState();
-            
             //Change to whatever users input keys are
             if (state.IsKeyDown(Keys.A)) {
                 if (!dasActive) {
                     bool canMoveLeft = true;
-                    foreach(Mino mino in minos) {
-                        if(mino.position.X - 1 < 0) {
+                    foreach (Mino mino in minos) {
+                        if (mino.position.X - 1 < 0) {
                             canMoveLeft = false;
                             break;
                         }
@@ -196,23 +237,74 @@ namespace Tetris {
                         }
                     }
                     if (canMoveLeft) {
-                        foreach(Mino mino in minos) {
+                        foreach (Mino mino in minos) {
                             mino.position.X--;
                         }
+                        dasActive = true;
                     }
-                    dasActive = true;
-                    //Start das cooldown
                 }
                 else {
                     //Das cooldown here
+                    if (!arrActive) {
+                        Thread t = new Thread(() => Wait(UserSettings.DAS, ref arrActive));
+                        dasThreads[0] = t;
+                        t.Start();
+                    }
+                    else {
+                        if (arrReady) {
+                            bool canMoveLeft = true;
+                            foreach (Mino mino in minos) {
+                                if (mino.position.X - 1 < 0) {
+                                    canMoveLeft = false;
+                                    break;
+                                }
+
+                                if (Board.bBoard[(int)(mino.position.X - 1), (int)mino.position.Y]) {
+                                    canMoveLeft = false;
+                                    break;
+                                }
+                            }
+                            if (canMoveLeft) {
+                                foreach (Mino mino in minos) {
+                                    mino.position.X--;
+                                }
+                            }
+                            arrReady = false;
+                            Thread d = new Thread(() => Wait(UserSettings.ARR, ref arrReady));
+                            dasThreads[1] = d;
+                            d.Start();
+                        }
+                    }
+
                 }
+            }
+
+            if (state.IsKeyUp(Keys.A) && state.IsKeyUp(Keys.D)) {
+                if (dasThreads[0] != null && dasThreads[0].ThreadState == ThreadState.Running || dasThreads[0] != null && dasThreads[0].ThreadState == ThreadState.WaitSleepJoin) {
+                    dasThreads[0].Interrupt();
+                    dasThreads[0] = null;
+                }
+                if (dasThreads[1] != null && dasThreads[1].ThreadState == ThreadState.Running || dasThreads[1] != null && dasThreads[1].ThreadState == ThreadState.WaitSleepJoin) {
+                    dasThreads[1].Interrupt();
+                    dasThreads[1] = null;
+                }
+                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) { //
+                    dasThreads[2].Interrupt();
+                    dasThreads[2] = null;
+                }
+                if (dasThreads[3] != null && dasThreads[3].ThreadState == ThreadState.Running || dasThreads[3] != null && dasThreads[3].ThreadState == ThreadState.WaitSleepJoin) {
+                    dasThreads[3].Interrupt();
+                    dasThreads[3] = null;
+                }
+                dasActive = false;
+                arrActive = false;
             }
 
             if (state.IsKeyDown(Keys.D)) {
                 if (!dasActive) {
                     bool canMoveRight = true;
                     foreach (Mino mino in minos) {
-                        if (mino.position.X + 1 < UserSettings.boardWidth) {
+                        if (mino.position.X + 1 >= UserSettings.boardWidth) {
                             canMoveRight = false;
                             break;
                         }
@@ -227,14 +319,47 @@ namespace Tetris {
                             mino.position.X++;
                         }
                     }
+                    dasActive = true;
 
                 }
-            }
+                else {
+                    //Das cooldown here
+                    if (!arrActive) {
+                        Thread t = new Thread(() => Wait(UserSettings.DAS, ref arrActive));
+                        dasThreads[2] = t;
+                        t.Start();
+                    }
+                    else {
+                        if (arrReady) {
+                            bool canMoveRight = true;
+                            foreach (Mino mino in minos) {
+                                if (mino.position.X + 1 >= UserSettings.boardWidth) {
+                                    canMoveRight = false;
+                                    break;
+                                }
 
+                                if (Board.bBoard[(int)(mino.position.X + 1), (int)mino.position.Y]) {
+                                    canMoveRight = false;
+                                    break;
+                                }
+                            }
+                            if (canMoveRight) {
+                                foreach (Mino mino in minos) {
+                                    mino.position.X++;
+                                }
+                            }
+                            arrReady = false;
+                            Thread d = new Thread(() => Wait(UserSettings.ARR, ref arrReady));
+                            dasThreads[3] = d;
+                            d.Start();
+                        }
+                    }
+                }
+            }
             if (state.IsKeyDown(Keys.S)) {
                 bool canMoveDown = true;
-                foreach(Mino mino in minos) { 
-                    if((int)mino.position.Y + 1 > UserSettings.boardHeight) {
+                foreach (Mino mino in minos) {
+                    if ((int)mino.position.Y + 1 > UserSettings.boardHeight) {
                         canMoveDown = false;
                         break;
                     }
@@ -268,6 +393,7 @@ namespace Tetris {
                     break;
                 }
             }
+
             if (!touchingGround) {
                 if (gFinished) {
                     foreach (Mino mino in minos) {
@@ -280,54 +406,53 @@ namespace Tetris {
                     t.Start();
                 }
             }
-        }
 
-        
-        public static void Wait(float milliseconds, ref bool done) {
 
-            TimeSpan startTime = GameTimeWrapper.gameTime.TotalGameTime;
-            TimeSpan timeWait = TimeSpan.FromMilliseconds(milliseconds);
-            done = false;
 
-            while(startTime + timeWait > GameTimeWrapper.gameTime.TotalGameTime) {
-                //Wait until time has elapsed
+            void Wait(float milliseconds, ref bool done) {
+                done = false;
+                try {
+                    Thread.Sleep((int)milliseconds);
+
+                }
+                catch (ThreadInterruptedException) {
+                    //ignore
+                }
+
+
+                done = true;
             }
 
-            
-            done = true;
         }
-
     }
+        public class Line : Piece {
+            public Line() {
+                //Initalize all 4 minos
 
-    public class Line : Piece { 
-        public Line() {
-            //Initalize all 4 minos
+                for (int i = 0; i < 4; i++) {
+                    Mino m = new Mino();
+                    minos[i] = m;
+                }
+            }
 
-            for(int i = 0; i < 4; i++) {
-                Mino m = new Mino();
-                minos[i] = m;
+            public void Spawn() {
+                minos[0].position = new Vector2(3, 0);
+                minos[1].position = new Vector2(4, 0);
+                minos[2].position = new Vector2(5, 0);
+                minos[3].position = new Vector2(6, 0);
+
+
+                Board.SetActive(this);
             }
         }
+        public class Mino {
+            public Vector2 position;
+            public Texture2D texture;
+            public Rectangle texRect;
 
-        public void Spawn() {
-            minos[0].position = new Vector2(3, 0);
-            minos[1].position = new Vector2(4, 0);
-            minos[2].position = new Vector2(5, 0);
-            minos[3].position = new Vector2(6, 0);
-
-
-            Board.SetActive(this);
+            public void SetRectangle() {
+                Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
+                texRect = rect;
+            }
         }
     }
-    public class Mino {
-        public Vector2 position;
-        public Texture2D texture;
-        public Rectangle texRect;
-
-        public void SetRectangle() {
-            //
-            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
-            texRect = rect;
-        }
-    }
-}

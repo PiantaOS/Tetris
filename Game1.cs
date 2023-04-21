@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.SymbolStore;
+using System.IO;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -230,7 +231,15 @@ namespace Tetris {
 
         //Most of these variables are boilerplate, refactor later
         Dictionary<string, Orientation> turnMap = new Dictionary<string, Orientation>();
-
+        Dictionary<Orientation, Vector2[]> relativePosition = new Dictionary<Orientation, Vector2[]>();
+        Vector2[,] wallKickData = new Vector2[8, 5] {{new Vector2(0, 0 ), new Vector2(-1, 0) , new Vector2(-1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                     {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, -1), new Vector2(0, 2), new Vector2(1, 2)},
+                                                      {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, -1), new Vector2(0, 2), new Vector2(1, 2)},
+                                                      {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                       {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                       {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, 2), new Vector2(-1, 2)},
+                                                        {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, 2), new Vector2(-1, 2)},
+                                                        {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1 ), new Vector2(0, -2), new Vector2(1, -2)}};
 
         public Mino[] minos = new Mino[4];
 
@@ -245,10 +254,12 @@ namespace Tetris {
 
         Thread[]? dasThreads = new Thread[] { null, null, null, null }; //0, 1 for left das and arr, 2, 3, for right das and arr
 
-
+        bool rightPerHeld;
+        bool leftPerHeld;
         bool arrReady = true;
 
         public Piece() {
+
             turnMap.Add("ZERO.Right", Orientation.RIGHT);
             turnMap.Add("ZERO.Left", Orientation.LEFT);
             turnMap.Add("RIGHT.Right", Orientation.TWO);
@@ -257,6 +268,10 @@ namespace Tetris {
             turnMap.Add("TWO.Left", Orientation.RIGHT);
             turnMap.Add("LEFT.Right", Orientation.ZERO);
             turnMap.Add("LEFT.Left", Orientation.TWO);
+            relativePosition.Add(Orientation.ZERO, new Vector2[4] { new Vector2(0, 1), new Vector2(1, 1), new Vector2(2, 1), new Vector2(1, 1) });
+            relativePosition.Add(Orientation.RIGHT, new Vector2[4] { new Vector2(2, 0), new Vector2(2, 1), new Vector2(2, 2), new Vector2(2, 3) });
+            relativePosition.Add(Orientation.TWO, new Vector2[4] { new Vector2(0, 2), new Vector2(1, 2), new Vector2(2, 2), new Vector2(1, 2) });
+            relativePosition.Add(Orientation.LEFT, new Vector2[4] { new Vector2(1, 0), new Vector2(1, 1), new Vector2(1, 2), new Vector2(1, 3) });
         }
         
 
@@ -469,7 +484,9 @@ namespace Tetris {
         public virtual void Rotate() {
             KeyboardState state = Keyboard.GetState();
 
-            if (state.IsKeyDown(Keys.E)) {
+            
+
+            if (state.IsKeyDown(Keys.E)&&rightPerHeld==false) {
                 RightRotation();
             }
             void RightRotation() {
@@ -479,6 +496,58 @@ namespace Tetris {
                     Console.WriteLine(targetOrientation);
                 }
                 else {
+                    Console.WriteLine("Failed Getting Rotation");
+                
+                }
+
+                Vector2[] targetTransformations = new Vector2[4];
+
+                Vector2[] nextPos;
+                relativePosition.TryGetValue(targetOrientation, out nextPos);
+                Vector2[] relativePos;
+                relativePosition.TryGetValue(orientation, out relativePos);
+
+                int rotationNum = (orientation == Orientation.ZERO && targetOrientation == Orientation.RIGHT) ? 0 :
+                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.ZERO) ? 1 :
+                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.TWO) ? 2 :
+                    (orientation == Orientation.TWO && targetOrientation == Orientation.RIGHT) ? 3 :
+                    (orientation == Orientation.TWO && targetOrientation == Orientation.LEFT) ? 4 :
+                    (orientation == Orientation.LEFT && targetOrientation == Orientation.TWO) ? 5 :
+                    (orientation == Orientation.LEFT && targetOrientation == Orientation.ZERO) ? 6 :
+                    (orientation == Orientation.ZERO && targetOrientation == Orientation.LEFT) ? 7 : 0;
+
+
+
+                for (int i = 0; i < 4; i++) {
+                    targetTransformations[i] = nextPos[i] - relativePos[i];
+                }
+                Vector2[] finalVectors = new Vector2[4];
+                for(int i = 0; i < 5; i++) {
+                    for(int j = 0; j < 4; j++) {
+                        Vector2 finalVector = (minos[j].position + targetTransformations[j]) + wallKickData[rotationNum, i];
+                        finalVectors[j] = finalVector;
+                        if (finalVector.X >= UserSettings.boardWidth || finalVector.Y >= UserSettings.boardWidth || finalVector.X < 0 || finalVector.Y < 0) {
+                            break;
+                        }
+                        if (Board.bBoard[(int)finalVector.X, (int)finalVector.Y]) {
+                            break;
+                        }
+                        goto RotateCheck;
+                    }
+                }
+                goto End;
+                RotateCheck:;
+
+                for(int i = 0; i < 4; i++) {
+                    minos[i].position = finalVectors[i];
+                }
+                rightPerHeld = true;
+
+                End:;
+            }
+            if (rightPerHeld) {
+                if (state.IsKeyUp(Keys.E)) {
+                    rightPerHeld = false;
                 }
             }
         }
@@ -490,7 +559,7 @@ namespace Tetris {
                     Mino m = new Mino();
                     minos[i] = m;
                 }
-            }
+        }
 
             public void Spawn() {
                 minos[0].position = new Vector2(3, 0);

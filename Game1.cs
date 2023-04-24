@@ -125,11 +125,8 @@ namespace Tetris {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            GameTimeWrapper.gameTime = gameTime;
-            GameTimeWrapper.gameTime.TotalGameTime = gameTime.TotalGameTime;
 
-            Board.activePiece.Rotate();
-            Board.activePiece.Move();
+            Board.activePiece.UpdatePiece();
 
             base.Update(gameTime);
         }
@@ -202,7 +199,7 @@ namespace Tetris {
                 }
             }
 
-            
+
         }
         public static void CheckLines() {
             throw new System.NotImplementedException();
@@ -225,22 +222,22 @@ namespace Tetris {
 
     }
 
-    public static class GameTimeWrapper { public static GameTime gameTime; }
+ //   public static class GameTimeWrapper { public static GameTime gameTime; }
 
     public abstract class Piece {
 
         //Most of these variables are boilerplate, refactor later
         Dictionary<string, Orientation> turnMap = new Dictionary<string, Orientation>();
         Dictionary<Orientation, Vector2[]> relativePosition = new Dictionary<Orientation, Vector2[]>();
-        Vector2[,] wallKickData = new Vector2[8, 5] {{new Vector2(0, 0 ), new Vector2(-1, 0) , new Vector2(-1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                     {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, -1), new Vector2(0, 2), new Vector2(1, 2)},
-                                                      {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, -1), new Vector2(0, 2), new Vector2(1, 2)},
-                                                      {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                       {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                       {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, 2), new Vector2(-1, 2)},
-                                                        {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, 2), new Vector2(-1, 2)},
-                                                        {new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1 ), new Vector2(0, -2), new Vector2(1, -2)}};
-
+        public Vector2[,] wallKickData = new Vector2[8, 5] {{new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, -1), new Vector2(0, +2), new Vector2(+1, +2)},
+                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, -1), new Vector2(0, +2), new Vector2(+1, +2)},
+                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
+                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, +2), new Vector2(-1, +2)},
+                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, +2), new Vector2(-1, +2)},
+                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, +1), new Vector2(0, -2), new Vector2(+1, -2)}};
+          
         public Mino[] minos = new Mino[4];
 
         bool dasActive;
@@ -258,6 +255,8 @@ namespace Tetris {
         bool leftPerHeld;
         bool arrReady = true;
 
+        public abstract void Spawn();
+
         public Piece() {
 
             turnMap.Add("ZERO.Right", Orientation.RIGHT);
@@ -268,12 +267,17 @@ namespace Tetris {
             turnMap.Add("TWO.Left", Orientation.RIGHT);
             turnMap.Add("LEFT.Right", Orientation.ZERO);
             turnMap.Add("LEFT.Left", Orientation.TWO);
-            relativePosition.Add(Orientation.ZERO, new Vector2[4] { new Vector2(0, 1), new Vector2(1, 1), new Vector2(2, 1), new Vector2(1, 1) });
+            relativePosition.Add(Orientation.ZERO, new Vector2[4] { new Vector2(0, 1), new Vector2(1, 1), new Vector2(2, 1), new Vector2(3, 1) });
             relativePosition.Add(Orientation.RIGHT, new Vector2[4] { new Vector2(2, 0), new Vector2(2, 1), new Vector2(2, 2), new Vector2(2, 3) });
-            relativePosition.Add(Orientation.TWO, new Vector2[4] { new Vector2(0, 2), new Vector2(1, 2), new Vector2(2, 2), new Vector2(1, 2) });
+            relativePosition.Add(Orientation.TWO, new Vector2[4] { new Vector2(0, 2), new Vector2(1, 2), new Vector2(2, 2), new Vector2(3, 2) });
             relativePosition.Add(Orientation.LEFT, new Vector2[4] { new Vector2(1, 0), new Vector2(1, 1), new Vector2(1, 2), new Vector2(1, 3) });
         }
-        
+
+        public void UpdatePiece() {
+            Gravity();
+            Rotate();
+            Move();
+        }
 
         public void Move() {
             KeyboardState state = Keyboard.GetState();
@@ -344,7 +348,7 @@ namespace Tetris {
                     dasThreads[1].Interrupt();
                     dasThreads[1] = null;
                 }
-                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) { 
+                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) {
                     dasThreads[2].Interrupt();
                     dasThreads[2] = null;
                 }
@@ -438,6 +442,14 @@ namespace Tetris {
 
             //Gravity timer stuff here
 
+
+
+
+
+
+
+        }
+        public void Gravity() {
             foreach (Mino mino in minos) {
                 if ((int)mino.position.Y + 1 > UserSettings.boardHeight) {
                     touchingGround = true;
@@ -455,49 +467,30 @@ namespace Tetris {
                     foreach (Mino mino in minos) {
                         mino.position.Y++;
                     }
-                    Console.WriteLine("Gravity Tick");
 
                     //https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
                     Thread t = new Thread(() => Wait(GameState.gravity / GameState.gravitySpeed / downMultiplier, ref gFinished));
                     t.Start();
                 }
             }
-
-
-
-            void Wait(float milliseconds, ref bool done) {
-                done = false;
-                try {
-                    Thread.Sleep((int)milliseconds);
-
-                }
-                catch (ThreadInterruptedException) {
-                    //ignore
-                }
-
-
-                done = true;
-            }
-
         }
-
         public virtual void Rotate() {
             KeyboardState state = Keyboard.GetState();
 
-            
 
-            if (state.IsKeyDown(Keys.E)&&rightPerHeld==false) {
+
+            if (state.IsKeyDown(Keys.E) && rightPerHeld == false) {
                 RightRotation();
             }
             void RightRotation() {
                 Orientation targetOrientation;
-                if(turnMap.TryGetValue(orientation.ToString() + ".Right", out targetOrientation)) {
-                    
+                if (turnMap.TryGetValue(orientation.ToString() + ".Right", out targetOrientation)) {
+
                     Console.WriteLine(targetOrientation);
                 }
                 else {
                     Console.WriteLine("Failed Getting Rotation");
-                
+
                 }
 
                 Vector2[] targetTransformations = new Vector2[4];
@@ -517,13 +510,13 @@ namespace Tetris {
                     (orientation == Orientation.ZERO && targetOrientation == Orientation.LEFT) ? 7 : 0;
 
 
-
                 for (int i = 0; i < 4; i++) {
                     targetTransformations[i] = nextPos[i] - relativePos[i];
                 }
                 Vector2[] finalVectors = new Vector2[4];
-                for(int i = 0; i < 5; i++) {
-                    for(int j = 0; j < 4; j++) {
+
+                for (int i = 0; i < 5; i++) {
+                    for (int j = 0; j < 4; j++) {
                         Vector2 finalVector = (minos[j].position + targetTransformations[j]) + wallKickData[rotationNum, i];
                         finalVectors[j] = finalVector;
                         if (finalVector.X >= UserSettings.boardWidth || finalVector.Y >= UserSettings.boardWidth || finalVector.X < 0 || finalVector.Y < 0) {
@@ -532,53 +525,159 @@ namespace Tetris {
                         if (Board.bBoard[(int)finalVector.X, (int)finalVector.Y]) {
                             break;
                         }
-                        goto RotateCheck;
+                        if (j == 3) {
+                            goto RotateCheck;
+                        }
                     }
                 }
                 goto End;
-                RotateCheck:;
+            RotateCheck:;
 
-                for(int i = 0; i < 4; i++) {
+                for (int i = 0; i < 4; i++) {
                     minos[i].position = finalVectors[i];
                 }
+                orientation = targetOrientation;
                 rightPerHeld = true;
 
-                End:;
+            End:;
             }
             if (rightPerHeld) {
                 if (state.IsKeyUp(Keys.E)) {
                     rightPerHeld = false;
                 }
             }
-        }
-    }
-        public class Line : Piece {
-            public Line() {
-                //Initalize all 4 minos
-                for (int i = 0; i < 4; i++) {
-                    Mino m = new Mino();
-                    minos[i] = m;
+
+            if (state.IsKeyDown(Keys.Q) && leftPerHeld == false) {
+                LeftRotation();
+            }
+
+            void LeftRotation() {
+                Orientation targetOrientation;
+                if (turnMap.TryGetValue(orientation.ToString() + ".Left", out targetOrientation)) {
+
+                    Console.WriteLine(targetOrientation);
                 }
-        }
+                else {
+                    Console.WriteLine("Failed Getting Rotation");
 
-            public void Spawn() {
-                minos[0].position = new Vector2(3, 0);
-                minos[1].position = new Vector2(4, 0);
-                minos[2].position = new Vector2(5, 0);
-                minos[3].position = new Vector2(6, 0);
+                }
+
+                Vector2[] targetTransformations = new Vector2[4];
+
+                Vector2[] nextPos;
+                relativePosition.TryGetValue(targetOrientation, out nextPos);
+                Vector2[] relativePos;
+                relativePosition.TryGetValue(orientation, out relativePos);
+
+                int rotationNum = (orientation == Orientation.ZERO && targetOrientation == Orientation.RIGHT) ? 0 :
+                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.ZERO) ? 1 :
+                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.TWO) ? 2 :
+                    (orientation == Orientation.TWO && targetOrientation == Orientation.RIGHT) ? 3 :
+                    (orientation == Orientation.TWO && targetOrientation == Orientation.LEFT) ? 4 :
+                    (orientation == Orientation.LEFT && targetOrientation == Orientation.TWO) ? 5 :
+                    (orientation == Orientation.LEFT && targetOrientation == Orientation.ZERO) ? 6 :
+                    (orientation == Orientation.ZERO && targetOrientation == Orientation.LEFT) ? 7 : 0;
 
 
-                Board.SetActive(this);
+                for (int i = 0; i < 4; i++) {
+                    targetTransformations[i] = nextPos[i] - relativePos[i];
+                }
+                Vector2[] finalVectors = new Vector2[4];
+
+                for (int i = 0; i < 5; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        Vector2 finalVector = (minos[j].position + targetTransformations[j]) + wallKickData[rotationNum, i];
+                        finalVectors[j] = finalVector;
+                        if (finalVector.X >= UserSettings.boardWidth || finalVector.Y >= UserSettings.boardWidth || finalVector.X < 0 || finalVector.Y < 0) {
+                            break;
+                        }
+                        if (Board.bBoard[(int)finalVector.X, (int)finalVector.Y]) {
+                            break;
+                        }
+                        if (j == 3) {
+                            goto LRotateCheck;
+                        }
+                    }
+                }
+                goto LEnd;
+            LRotateCheck:;
+
+                for (int i = 0; i < 4; i++) {
+                    minos[i].position = finalVectors[i];
+                }
+                orientation = targetOrientation;
+                leftPerHeld = true;
+
+            LEnd:;
+            }
+            if (leftPerHeld) {
+                if (state.IsKeyUp(Keys.Q)) {
+                    leftPerHeld = false;
+                }
             }
         }
-        public class Mino {
-            public Vector2 position;
-            public Texture2D texture;
-            public Rectangle texRect;
+        void Wait(float milliseconds, ref bool done) {
+            done = false;
+            try {
+                Thread.Sleep((int)milliseconds);
 
-            public void SetRectangle() {
-                Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
-                texRect = rect;
             }
+            catch (ThreadInterruptedException) {
+                //ignore
+            }
+
+
+            done = true;
         }
     }
+    public class Line : Piece {
+        public Line() {
+            //Initalize all 4 minos
+            for (int i = 0; i < 4; i++) {
+                Mino m = new Mino();
+                minos[i] = m;
+            }
+            wallKickData = new Vector2[8, 5] {{new Vector2(0, 0), new Vector2(-2, +0), new Vector2(+1, +0), new Vector2(-2, -1), new Vector2(+1, +2)},
+                                              {new Vector2(0, 0), new Vector2(+2, +0), new Vector2(-1, +0), new Vector2(+2, +1), new Vector2(-1, -2)},
+                                              {new Vector2(0, 0), new Vector2(-1, +0), new Vector2(+2, +0), new Vector2(-1, +2), new Vector2(+2, -1)},
+                                              {new Vector2(0, 0), new Vector2(+1, +0), new Vector2(-2, +0), new Vector2(+1, -2), new Vector2(-1, -2)},
+                                              {new Vector2(0, 0), new Vector2(+2, +0), new Vector2(-1, +0), new Vector2(+2, +1), new Vector2(-1, -2)},
+                                              {new Vector2(0, 0), new Vector2(-2, +0), new Vector2(+1, +0), new Vector2(-2, -1), new Vector2(+1, +2)},
+                                              {new Vector2(0, 0), new Vector2(+1, +0), new Vector2(-2, +0), new Vector2(+1, -2), new Vector2(-2, +1)},
+                                              {new Vector2(0, 0), new Vector2(-1, +0), new Vector2(+2, +0), new Vector2(-1, +2), new Vector2(+2, -1)}};
+        }
+
+        public override void Spawn() {
+            minos[0].position = new Vector2(3, 0);
+            minos[1].position = new Vector2(4, 0);
+            minos[2].position = new Vector2(5, 0);
+            minos[3].position = new Vector2(6, 0);
+
+
+            Board.SetActive(this);
+        }
+    }
+
+    public class Box : Piece {
+
+        public override void Spawn() {
+            minos[0].position = new Vector2(4, 0);
+            minos[1].position = new Vector2(5, 0);
+            minos[2].position = new Vector2(4, 1);
+            minos[3].position = new Vector2(5, 1);
+        }
+        public override void Rotate() {
+            return;
+        }
+    } 
+    public class Mino {
+        public Vector2 position;
+        public Texture2D texture;
+        public Rectangle texRect;
+
+        public void SetRectangle() {
+            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
+            texRect = rect;
+        }
+    }
+}

@@ -5,53 +5,36 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.SymbolStore;
 using System.IO;
+using System.Net.Http.Headers;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Vector2 = System.Numerics.Vector2;
 
 namespace Tetris {
 
 
-    /* 
-    CURRENT PROBLEMS / THINGS TO WORK ON
-
-    Soft dropping
-    Hard Dropping
-    Ghost display
-    Lock Delay - https://tetris.wiki/Lock_delay
-    Make pieces/board look nicer
-    Rotation - https://tetris.wiki/Super_Rotation_System
-    Holding
-    Bag System
-
-    Player Input
-
-    REFACTOR
-    */
+    //Ctrl F add or change to see what to add or change
 
 
-
-
-
-    /*
-    VERY VERY SPECIAL THANKS
-    https://stackoverflow.com/questions/7448589/interrupt-a-sleeping-thread - MobDev
-    https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
-    */
-
-    public enum Orientation {
-        ZERO,
-        RIGHT,
-        TWO,
-        LEFT
-    }
+    #region Game Information
     public static class UserSettings {
-        public static float DAS { get; set; } //Delayed Auto Shift: the time between the initial keypress and the start of its automatic repeat movement, measured in frames (or milliseconds)
-        public static float ARR { get; set; } //Automatic Repeat Rate: the speed at which tetrominoes move when holding down movement keys, measured in frames per movement (or milliseconds)
-        public static float DCD { get; set; } //DAS Cut Delay: if not 0, any ongoing DAS movement will pause for a set amount of time after dropping/rotating a piece, measured in frames (or milliseconds) (keep at zero usually)
-        public static float SDC { get; set; } //Soft Drop Factor: the factor with which soft drop changes the gravity speed (measured in multiples, for example 10x)
+        public static int DAS { get; set; } //Delayed Auto Shift: the time between the initial keypress and the start of its automatic repeat movement, measured in frames (or milliseconds)
+        public static int ARR { get; set; } //Automatic Repeat Rate: the speed at which tetrominoes move when holding down movement keys, measured in frames per movement (or milliseconds)
+        public static int DCD { get; set; } //DAS Cut Delay: if not 0, any ongoing DAS movement will pause for a set amount of time after dropping/rotating a piece, measured in frames (or milliseconds) (keep at zero usually)
+        public static int SDC { get; set; } //Soft Drop Factor: the factor with which soft drop changes the gravity speed (measured in multiples, for example 10x)
         public static int boardWidth { get; set; } //The width of the board
         public static int boardHeight { get; set; } //The height of the board
+
+        public static Keys leftKey { get; set;}
+        public static Keys rightKey { get; set;}
+        public static Keys dropKey { get; set;}
+        public static Keys rotateLeftKey { get; set;}
+        public static Keys rotateRightKey { get; set;}
+        public static Keys hardDropKey { get; set;}
+        public static Keys holdKey { get; set;}
+        public static Keys flipKey { get; set;}
 
 
         static UserSettings() {
@@ -81,6 +64,8 @@ namespace Tetris {
         }
 
     }
+    
+    #endregion
 
     public class Game1 : Game {
         private GraphicsDeviceManager _graphics;
@@ -114,7 +99,8 @@ namespace Tetris {
             Board.purpleTex = Content.Load<Texture2D>("PurpleTile");
             Board.orangeTex = Content.Load<Texture2D>("OrangeTile");
 
-            Line l = new Line();
+            LinePiece l = new LinePiece();
+          //  Box b = new Box();
             l.Spawn();
 
 
@@ -134,17 +120,20 @@ namespace Tetris {
         protected override void Draw(GameTime gameTime) {
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
-            // TODO: Add your drawing code here
             _spriteBatch.Begin();
 
+
+            //Draw board
             Rectangle destRect = new Rectangle(300, 30, 200, 400);
 
             _spriteBatch.Draw(boardTex, destRect, Color.Gray);
 
-            foreach (Mino mino in Board.activePiece.minos) {
-                mino.SetRectangle();
-                _spriteBatch.Draw(mino.texture, mino.texRect, Color.White);
+            //Draw board active pieces
+            for(int i = 0; i < Board.TextureData.Length; i++){
+                
             }
+
+            //Draw active piece
 
 
             _spriteBatch.End();
@@ -180,9 +169,10 @@ namespace Tetris {
             {true , false, false, false, false, true , true , true , false, true }};
         */
         public static Piece activePiece;
-        public static Rectangle[,] rBoard = new Rectangle[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of rectangles
-        public static Texture2D[,]? tBoard = new Texture2D[UserSettings.boardWidth, UserSettings.boardHeight + 1]; //Version of the board comprised of texture2ds
-        public static bool[,] bBoard = new bool[UserSettings.boardWidth, UserSettings.boardHeight + 1];  //Version of the board comprised of bools
+        
+        public static bool[,] BoardData; //Whether or not a board tile is filled in
+        public static Texture2D[,] TextureData;
+
         public static Texture2D redTex;
         public static Texture2D greenTex;
         public static Texture2D blueTex;
@@ -193,9 +183,7 @@ namespace Tetris {
         static Board() {
             for (int i = 0; i < UserSettings.boardWidth; i++) {
                 for (int j = 0; j < UserSettings.boardHeight + 1; j++) {
-                    rBoard[i, j] = new Rectangle();
-                    tBoard[i, j] = null;
-                    bBoard[i, j] = false;
+                    BoardData[i, j] = false;
                 }
             }
 
@@ -203,461 +191,197 @@ namespace Tetris {
         }
         public static void CheckLines() {
             throw new System.NotImplementedException();
-
         }
 
-        public static void SetActive(Piece piece) { // Add piece here
-            switch (piece) {
-                case Line l:
-                    foreach (Mino mino in l.minos) {
-                        mino.texture = lightBlueTex;
-                    }
-                    break;
-                default:
-                    break;
-
-            }
-            activePiece = piece;
-        }
-
+       
     }
 
- //   public static class GameTimeWrapper { public static GameTime gameTime; }
-
+    //CHANGE: Move classes to seperate file
     public abstract class Piece {
+        public System.Numerics.Vector2[] Position = new System.Numerics.Vector2[4];
 
-        //Most of these variables are boilerplate, refactor later
-        Dictionary<string, Orientation> turnMap = new Dictionary<string, Orientation>();
-        Dictionary<Orientation, Vector2[]> relativePosition = new Dictionary<Orientation, Vector2[]>();
-        public Vector2[,] wallKickData = new Vector2[8, 5] {{new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, -1), new Vector2(0, +2), new Vector2(+1, +2)},
-                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, -1), new Vector2(0, +2), new Vector2(+1, +2)},
-                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, +1), new Vector2(0, -2), new Vector2(-1, -2)},
-                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, +2), new Vector2(-1, +2)},
-                                                            {new Vector2(0, 0), new Vector2(-1, 0), new Vector2(-1, -1), new Vector2(0, +2), new Vector2(-1, +2)},
-                                                            {new Vector2(0, 0), new Vector2(+1, 0), new Vector2(+1, +1), new Vector2(0, -2), new Vector2(+1, -2)}};
-          
-        public Mino[] minos = new Mino[4];
+        private enum ControlState{
+            Inactive, //Nothing being pressed
+            Held,
+            DASWaiting,
+            ARRActive,
+        }
 
-        bool dasActive;
-        bool arrActive;
-        Orientation orientation = Orientation.ZERO;
-
-        bool gFinished = true;
-        bool touchingGround = false;
-
-        int downMultiplier = 1;
-
-        Thread[]? dasThreads = new Thread[] { null, null, null, null }; //0, 1 for left das and arr, 2, 3, for right das and arr
-
-        bool rightPerHeld;
-        bool leftPerHeld;
-        bool arrReady = true;
+        private ControlState currentState = ControlState.Inactive;
 
         public abstract void Spawn();
 
-        public Piece() {
+        private bool finished; //bool for use in wait function
 
-            turnMap.Add("ZERO.Right", Orientation.RIGHT);
-            turnMap.Add("ZERO.Left", Orientation.LEFT);
-            turnMap.Add("RIGHT.Right", Orientation.TWO);
-            turnMap.Add("RIGHT.Left", Orientation.ZERO);
-            turnMap.Add("TWO.Right", Orientation.LEFT);
-            turnMap.Add("TWO.Left", Orientation.RIGHT);
-            turnMap.Add("LEFT.Right", Orientation.ZERO);
-            turnMap.Add("LEFT.Left", Orientation.TWO);
-            relativePosition.Add(Orientation.ZERO, new Vector2[4] { new Vector2(0, 1), new Vector2(1, 1), new Vector2(2, 1), new Vector2(3, 1) });
-            relativePosition.Add(Orientation.RIGHT, new Vector2[4] { new Vector2(2, 0), new Vector2(2, 1), new Vector2(2, 2), new Vector2(2, 3) });
-            relativePosition.Add(Orientation.TWO, new Vector2[4] { new Vector2(0, 2), new Vector2(1, 2), new Vector2(2, 2), new Vector2(3, 2) });
-            relativePosition.Add(Orientation.LEFT, new Vector2[4] { new Vector2(1, 0), new Vector2(1, 1), new Vector2(1, 2), new Vector2(1, 3) });
-        }
+        private bool arrWaiting; //bool to see if arr is currently waiting
 
-        public void UpdatePiece() {
-            Gravity();
-            Rotate();
+        public void UpdatePiece(){
             Move();
+            Rotate();
+            Gravity();
         }
+        private void Move(){
 
-        public void Move() {
-            KeyboardState state = Keyboard.GetState();
-            //Change to whatever users input keys are
-            if (state.IsKeyDown(Keys.A)) {
-                if (!dasActive) {
-                    bool canMoveLeft = true;
-                    foreach (Mino mino in minos) {
-                        if (mino.position.X - 1 < 0) {
-                            canMoveLeft = false;
-                            break;
-                        }
+            KeyboardState kState = Keyboard.GetState();
 
-                        if (Board.bBoard[(int)(mino.position.X - 1), (int)mino.position.Y]) {
-                            canMoveLeft = false;
-                            break;
-                        }
-                    }
-                    if (canMoveLeft) {
-                        foreach (Mino mino in minos) {
-                            mino.position.X--;
-                        }
-                        dasActive = true;
-                    }
-                }
-                else {
-                    //Das cooldown here
-                    if (!arrActive) {
-                        Thread t = new Thread(() => Wait(UserSettings.DAS, ref arrActive));
-                        dasThreads[0] = t;
-                        t.Start();
-                    }
-                    else {
-                        if (arrReady) {
-                            bool canMoveLeft = true;
-                            foreach (Mino mino in minos) {
-                                if (mino.position.X - 1 < 0) {
-                                    canMoveLeft = false;
-                                    break;
-                                }
+            //CHANGE: This isn't great
+            if(kState.IsKeyDown(UserSettings.leftKey)){
 
-                                if (Board.bBoard[(int)(mino.position.X - 1), (int)mino.position.Y]) {
-                                    canMoveLeft = false;
-                                    break;
-                                }
-                            }
-                            if (canMoveLeft) {
-                                foreach (Mino mino in minos) {
-                                    mino.position.X--;
-                                }
-                            }
-                            arrReady = false;
-                            Thread d = new Thread(() => Wait(UserSettings.ARR, ref arrReady));
-                            dasThreads[1] = d;
-                            d.Start();
-                        }
-                    }
-
-                }
-            }
-
-            if (state.IsKeyUp(Keys.A) && state.IsKeyUp(Keys.D)) {
-                if (dasThreads[0] != null && dasThreads[0].ThreadState == ThreadState.Running || dasThreads[0] != null && dasThreads[0].ThreadState == ThreadState.WaitSleepJoin) {
-                    dasThreads[0].Interrupt();
-                    dasThreads[0] = null;
-                }
-                if (dasThreads[1] != null && dasThreads[1].ThreadState == ThreadState.Running || dasThreads[1] != null && dasThreads[1].ThreadState == ThreadState.WaitSleepJoin) {
-                    dasThreads[1].Interrupt();
-                    dasThreads[1] = null;
-                }
-                if (dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.Running || dasThreads[2] != null && dasThreads[2].ThreadState == ThreadState.WaitSleepJoin) {
-                    dasThreads[2].Interrupt();
-                    dasThreads[2] = null;
-                }
-                if (dasThreads[3] != null && dasThreads[3].ThreadState == ThreadState.Running || dasThreads[3] != null && dasThreads[3].ThreadState == ThreadState.WaitSleepJoin) {
-                    dasThreads[3].Interrupt();
-                    dasThreads[3] = null;
-                }
-                dasActive = false;
-                arrActive = false;
-            }
-
-            if (state.IsKeyDown(Keys.D)) {
-                if (!dasActive) {
-                    bool canMoveRight = true;
-                    foreach (Mino mino in minos) {
-                        if (mino.position.X + 1 >= UserSettings.boardWidth) {
-                            canMoveRight = false;
-                            break;
-                        }
-
-                        if (Board.bBoard[(int)(mino.position.X + 1), (int)mino.position.Y]) {
-                            canMoveRight = false;
-                            break;
-                        }
-                    }
-                    if (canMoveRight) {
-                        foreach (Mino mino in minos) {
-                            mino.position.X++;
-                        }
-                    }
-                    dasActive = true;
-
-                }
-                else {
-                    //Das cooldown here
-                    if (!arrActive) {
-                        Thread t = new Thread(() => Wait(UserSettings.DAS, ref arrActive));
-                        dasThreads[2] = t;
-                        t.Start();
-                    }
-                    else {
-                        if (arrReady) {
-                            bool canMoveRight = true;
-                            foreach (Mino mino in minos) {
-                                if (mino.position.X + 1 >= UserSettings.boardWidth) {
-                                    canMoveRight = false;
-                                    break;
-                                }
-
-                                if (Board.bBoard[(int)(mino.position.X + 1), (int)mino.position.Y]) {
-                                    canMoveRight = false;
-                                    break;
-                                }
-                            }
-                            if (canMoveRight) {
-                                foreach (Mino mino in minos) {
-                                    mino.position.X++;
-                                }
-                            }
-                            arrReady = false;
-                            Thread d = new Thread(() => Wait(UserSettings.ARR, ref arrReady));
-                            dasThreads[3] = d;
-                            d.Start();
-                        }
-                    }
-                }
-            }
-            if (state.IsKeyDown(Keys.S)) {
-                bool canMoveDown = true;
-                foreach (Mino mino in minos) {
-                    if ((int)mino.position.Y + 1 > UserSettings.boardHeight) {
-                        canMoveDown = false;
-                        break;
-                    }
-
-                    if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y + 1]) {
-                        canMoveDown = false;
-                        break;
-                    }
-
-                }
-
-                if (canMoveDown) {
-                    //Reset gravity timer
-                    downMultiplier = 25;
-                }
-                else {
-                    downMultiplier = 1;
-                }
-            }
-
-            //Gravity timer stuff here
-
-
-
-
-
-
-
-        }
-        public void Gravity() {
-            foreach (Mino mino in minos) {
-                if ((int)mino.position.Y + 1 > UserSettings.boardHeight) {
-                    touchingGround = true;
+                if(!CheckSide(-1)) { return ;}
+            
+                switch(currentState){
+                    case ControlState.Inactive:
+                    //Key press
+                    Shift(-1);
+                    currentState = ControlState.Held;
                     break;
-                }
 
-                if (Board.bBoard[(int)mino.position.X, (int)mino.position.Y + 1]) {
-                    touchingGround = true;
-                    break;
-                }
-            }
-
-            if (!touchingGround) {
-                if (gFinished) {
-                    foreach (Mino mino in minos) {
-                        mino.position.Y++;
-                    }
-
-                    //https://stackoverflow.com/questions/14854878/creating-new-thread-with-method-with-parameter
-                    Thread t = new Thread(() => Wait(GameState.gravity / GameState.gravitySpeed / downMultiplier, ref gFinished));
+                    case ControlState.Held:
+                    //Start timer
+                    Thread t = new Thread(() => Timer.Wait(new TimeSpan(0, 0, 0, 0, UserSettings.DAS), ref finished));
                     t.Start();
-                }
-            }
-        }
-        public virtual void Rotate() {
-            KeyboardState state = Keyboard.GetState();
+                    currentState = ControlState.DASWaiting;
+                    break;
 
+                    case ControlState.DASWaiting:
+                    //Check if das is done, if so move left one and start arr
+                    if(!finished) { Console.WriteLine("Waiting for DAS Delay"); return; }
+                    Console.WriteLine("DAS Finished");
+                    currentState = ControlState.ARRActive;
+                    arrWaiting = true;
+                    break;
 
-
-            if (state.IsKeyDown(Keys.E) && rightPerHeld == false) {
-                RightRotation();
-            }
-            void RightRotation() {
-                Orientation targetOrientation;
-                if (turnMap.TryGetValue(orientation.ToString() + ".Right", out targetOrientation)) {
-
-                    Console.WriteLine(targetOrientation);
-                }
-                else {
-                    Console.WriteLine("Failed Getting Rotation");
-
-                }
-
-                Vector2[] targetTransformations = new Vector2[4];
-
-                Vector2[] nextPos;
-                relativePosition.TryGetValue(targetOrientation, out nextPos);
-                Vector2[] relativePos;
-                relativePosition.TryGetValue(orientation, out relativePos);
-
-                int rotationNum = (orientation == Orientation.ZERO && targetOrientation == Orientation.RIGHT) ? 0 :
-                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.ZERO) ? 1 :
-                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.TWO) ? 2 :
-                    (orientation == Orientation.TWO && targetOrientation == Orientation.RIGHT) ? 3 :
-                    (orientation == Orientation.TWO && targetOrientation == Orientation.LEFT) ? 4 :
-                    (orientation == Orientation.LEFT && targetOrientation == Orientation.TWO) ? 5 :
-                    (orientation == Orientation.LEFT && targetOrientation == Orientation.ZERO) ? 6 :
-                    (orientation == Orientation.ZERO && targetOrientation == Orientation.LEFT) ? 7 : 0;
-
-
-                for (int i = 0; i < 4; i++) {
-                    targetTransformations[i] = nextPos[i] - relativePos[i];
-                }
-                Vector2[] finalVectors = new Vector2[4];
-
-                for (int i = 0; i < 5; i++) {
-                    for (int j = 0; j < 4; j++) {
-                        Vector2 finalVector = (minos[j].position + targetTransformations[j]) + wallKickData[rotationNum, i];
-                        finalVectors[j] = finalVector;
-                        if (finalVector.X >= UserSettings.boardWidth || finalVector.Y >= UserSettings.boardWidth || finalVector.X < 0 || finalVector.Y < 0) {
-                            break;
-                        }
-                        if (Board.bBoard[(int)finalVector.X, (int)finalVector.Y]) {
-                            break;
-                        }
-                        if (j == 3) {
-                            goto RotateCheck;
-                        }
+                    case ControlState.ARRActive:
+                    //Check if arr timer is up, if so move and reset timer
+                    if(arrWaiting){
+                        Console.WriteLine("ARR Tick");
+                        Shift(-1);
+                        Thread ta = new Thread(() => Timer.Wait(new TimeSpan(0, 0, 0, 0, UserSettings.DAS), ref arrWaiting));
+                        ta.Start();
+                        break;
                     }
+
+                    Console.WriteLine("Waiting for ARR to reset");
+                    break;
+
+                    
                 }
-                goto End;
-            RotateCheck:;
+                return;
+                
+            } 
 
-                for (int i = 0; i < 4; i++) {
-                    minos[i].position = finalVectors[i];
-                }
-                orientation = targetOrientation;
-                rightPerHeld = true;
+            if(kState.IsKeyDown(UserSettings.rightKey)){
+                //Check if moving right is possible
 
-            End:;
-            }
-            if (rightPerHeld) {
-                if (state.IsKeyUp(Keys.E)) {
-                    rightPerHeld = false;
-                }
-            }
+                if(!CheckSide(1)) { return ;}
 
-            if (state.IsKeyDown(Keys.Q) && leftPerHeld == false) {
-                LeftRotation();
-            }
+                switch(currentState){
+                    case ControlState.Inactive:
+                    //Key press
+                    Shift(1);
+                    currentState = ControlState.Held;
+                    break;
 
-            void LeftRotation() {
-                Orientation targetOrientation;
-                if (turnMap.TryGetValue(orientation.ToString() + ".Left", out targetOrientation)) {
+                    case ControlState.Held:
+                    //Start timer
+                    Thread t = new Thread(() => Timer.Wait(new TimeSpan(0, 0, 0, 0, UserSettings.DAS), ref finished));
+                    t.Start();
+                    currentState = ControlState.DASWaiting;
+                    break;
 
-                    Console.WriteLine(targetOrientation);
-                }
-                else {
-                    Console.WriteLine("Failed Getting Rotation");
+                    case ControlState.DASWaiting:
+                    //Check if das is done, if so move left one and start arr
+                    if(!finished) { Console.WriteLine("Waiting for DAS Delay"); return; }
+                    Console.WriteLine("DAS Finished");
+                    currentState = ControlState.ARRActive;
+                    arrWaiting = true;
+                    break;
 
-                }
-
-                Vector2[] targetTransformations = new Vector2[4];
-
-                Vector2[] nextPos;
-                relativePosition.TryGetValue(targetOrientation, out nextPos);
-                Vector2[] relativePos;
-                relativePosition.TryGetValue(orientation, out relativePos);
-
-                int rotationNum = (orientation == Orientation.ZERO && targetOrientation == Orientation.RIGHT) ? 0 :
-                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.ZERO) ? 1 :
-                    (orientation == Orientation.RIGHT && targetOrientation == Orientation.TWO) ? 2 :
-                    (orientation == Orientation.TWO && targetOrientation == Orientation.RIGHT) ? 3 :
-                    (orientation == Orientation.TWO && targetOrientation == Orientation.LEFT) ? 4 :
-                    (orientation == Orientation.LEFT && targetOrientation == Orientation.TWO) ? 5 :
-                    (orientation == Orientation.LEFT && targetOrientation == Orientation.ZERO) ? 6 :
-                    (orientation == Orientation.ZERO && targetOrientation == Orientation.LEFT) ? 7 : 0;
-
-
-                for (int i = 0; i < 4; i++) {
-                    targetTransformations[i] = nextPos[i] - relativePos[i];
-                }
-                Vector2[] finalVectors = new Vector2[4];
-
-                for (int i = 0; i < 5; i++) {
-                    for (int j = 0; j < 4; j++) {
-                        Vector2 finalVector = (minos[j].position + targetTransformations[j]) + wallKickData[rotationNum, i];
-                        finalVectors[j] = finalVector;
-                        if (finalVector.X >= UserSettings.boardWidth || finalVector.Y >= UserSettings.boardWidth || finalVector.X < 0 || finalVector.Y < 0) {
-                            break;
-                        }
-                        if (Board.bBoard[(int)finalVector.X, (int)finalVector.Y]) {
-                            break;
-                        }
-                        if (j == 3) {
-                            goto LRotateCheck;
-                        }
+                    case ControlState.ARRActive:
+                    //Check if arr timer is up, if so move and reset timer
+                    if(arrWaiting){
+                        Console.WriteLine("ARR Tick");
+                        Shift(1);
+                        Thread ta = new Thread(() => Timer.Wait(new TimeSpan(0, 0, 0, 0, UserSettings.DAS), ref arrWaiting));
+                        ta.Start();
+                        break;
                     }
-                }
-                goto LEnd;
-            LRotateCheck:;
 
-                for (int i = 0; i < 4; i++) {
-                    minos[i].position = finalVectors[i];
-                }
-                orientation = targetOrientation;
-                leftPerHeld = true;
+                    Console.WriteLine("Waiting for ARR to reset");
+                    break;
 
-            LEnd:;
+                    
+                }
+                return;
+                //if the key has been held
             }
-            if (leftPerHeld) {
-                if (state.IsKeyUp(Keys.Q)) {
-                    leftPerHeld = false;
-                }
+
+
+            //if no input was taken
+            currentState = ControlState.Inactive;
+            //Cancel all das and arr timers
+        }
+
+        private void Shift(int direction){
+            for(int i = 0; i < Position.Length; i++){
+                Position[i].X += direction;
             }
         }
-        void Wait(float milliseconds, ref bool done) {
-            done = false;
-            try {
-                Thread.Sleep((int)milliseconds);
 
+        private bool CheckSide(int direction){
+
+            //Add code to check for edge of wall
+            
+            for(int i = 0; i < Position.Length; i++){
+                int nextXIndex = (int)Position[i].X + direction;
+                int currentYPosition = (int)Position[i].Y;
+                if(Board.BoardData[nextXIndex, currentYPosition] == true){
+                    return false;
+                }
             }
-            catch (ThreadInterruptedException) {
-                //ignore
-            }
 
 
-            done = true;
+
+            return true;
         }
+        //Work on these next
+        private void Rotate(){
+            throw new NotImplementedException();
+        }
+        private void Gravity(){
+            throw new NotImplementedException();
+        }
+
     }
-    public class Line : Piece {
-        public Line() {
-            //Initalize all 4 minos
-            for (int i = 0; i < 4; i++) {
-                Mino m = new Mino();
-                minos[i] = m;
-            }
-            wallKickData = new Vector2[8, 5] {{new Vector2(0, 0), new Vector2(-2, +0), new Vector2(+1, +0), new Vector2(-2, -1), new Vector2(+1, +2)},
-                                              {new Vector2(0, 0), new Vector2(+2, +0), new Vector2(-1, +0), new Vector2(+2, +1), new Vector2(-1, -2)},
-                                              {new Vector2(0, 0), new Vector2(-1, +0), new Vector2(+2, +0), new Vector2(-1, +2), new Vector2(+2, -1)},
-                                              {new Vector2(0, 0), new Vector2(+1, +0), new Vector2(-2, +0), new Vector2(+1, -2), new Vector2(-1, -2)},
-                                              {new Vector2(0, 0), new Vector2(+2, +0), new Vector2(-1, +0), new Vector2(+2, +1), new Vector2(-1, -2)},
-                                              {new Vector2(0, 0), new Vector2(-2, +0), new Vector2(+1, +0), new Vector2(-2, -1), new Vector2(+1, +2)},
-                                              {new Vector2(0, 0), new Vector2(+1, +0), new Vector2(-2, +0), new Vector2(+1, -2), new Vector2(-2, +1)},
-                                              {new Vector2(0, 0), new Vector2(-1, +0), new Vector2(+2, +0), new Vector2(-1, +2), new Vector2(+2, -1)}};
-        }
 
-        public override void Spawn() {
-            minos[0].position = new Vector2(3, 0);
-            minos[1].position = new Vector2(4, 0);
-            minos[2].position = new Vector2(5, 0);
-            minos[3].position = new Vector2(6, 0);
+    public static class Timer{
+        public static void Wait(TimeSpan time, ref bool finished){
+            finished = false;
+                try {
+                    Thread.Sleep(time.Milliseconds);
+
+                }
+                catch (ThreadInterruptedException) {
+                    //ignore
+                }
 
 
-            Board.SetActive(this);
+                finished = true;
         }
     }
 
+    #region Pieces
+    public class LinePiece : Piece{
+        public override void Spawn()
+        {
+            Position[0] = new Vector2(3, 0);
+            Position[1] = new Vector2(4, 0);
+            Position[2] = new Vector2(5, 0);
+            Position[3] = new Vector2(6, 0);
+        }
+
+    }    
+ /*
     public class Box : Piece {
 
         public override void Spawn() {
@@ -670,14 +394,8 @@ namespace Tetris {
             return;
         }
     } 
-    public class Mino {
-        public Vector2 position;
-        public Texture2D texture;
-        public Rectangle texRect;
+    */
 
-        public void SetRectangle() {
-            Rectangle rect = new Rectangle((int)position.X * 20 + 300, (int)position.Y * 20 + 10, 20, 20);
-            texRect = rect;
-        }
-    }
+    #endregion
+   
 }

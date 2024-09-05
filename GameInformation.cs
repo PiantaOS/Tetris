@@ -15,7 +15,6 @@ namespace Tetris{
         public static Keys rotateRightKey { get; set;}
         public static Keys hardDropKey { get; set;}
         public static Keys holdKey { get; set;}
-        public static Keys flipKey { get; set;}
 
 
         static UserSettings() {
@@ -33,7 +32,6 @@ namespace Tetris{
             rotateRightKey = Keys.E;
             hardDropKey = Keys.Space;
             holdKey = Keys.C;
-            flipKey = Keys.R;
         }
     }
 

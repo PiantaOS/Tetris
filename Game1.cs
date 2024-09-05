@@ -51,6 +51,7 @@ namespace Tetris {
             Board.purpleTex = Content.Load<Texture2D>("PurpleTile");
             Board.orangeTex = Content.Load<Texture2D>("OrangeTile");
 
+            Board.LoadPreset();
             LinePiece l = new LinePiece();
           //  Box b = new Box();
             l.Spawn();
@@ -68,7 +69,6 @@ namespace Tetris {
         }
 
         protected override void Draw(GameTime gameTime) {
-            
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
             _spriteBatch.Begin();
@@ -87,15 +87,20 @@ namespace Tetris {
             //Draw board active pieces
             for(int i = 0; i < Board.TextureData.GetLength(1); i++){
                 for(int j = 0; j < Board.TextureData.GetLength(0); j++){
-                    if(Board.TextureData[j, i]==null) { continue;}
+                    
+                    if(Board.TextureData[j, i]==null) { goto fr;} 
 
+                    Console.WriteLine("VHATT?");
                     //Replace overloads
                     Rectangle endRect = new Rectangle(1, 1, pieceSideLength, pieceSideLength);
 
                     _spriteBatch.Draw(Board.TextureData[j, i], endRect, Color.White);
 
                 }
+
+                fr:;
             }
+
 
             //Draw active piece
             const int minoCount = 4;

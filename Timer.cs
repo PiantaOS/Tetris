@@ -1,8 +1,9 @@
-    using System.Threading;
+using System;
+using System.Threading;
     using TimeSpan = System.TimeSpan;
     public static class Timer{
         public static void Wait(int waitMilliseconds, ref bool finished){
-            finished = false;
+                finished = false;
                 try {
                     Thread.Sleep(waitMilliseconds);
 

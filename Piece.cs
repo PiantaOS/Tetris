@@ -7,6 +7,7 @@ namespace Tetris{
     using TimeSpan = System.TimeSpan;
     using NotImplementedException = System.NotImplementedException;
     using Microsoft.Xna.Framework.Graphics;
+    using System.Runtime.InteropServices;
 
     public abstract class Piece {
         //Find way to set this
@@ -28,14 +29,21 @@ namespace Tetris{
         private bool finished; //bool for use in wait function
 
         private bool arrWaiting; //bool to see if arr is currently waiting
-        private bool gravityFinished; //bool to see if gravity timer has finished
+        private bool gravityFinished = true; //bool to see if gravity timer has finished
 
+        private int lastRotInput = 0;
+
+        private int currentRotation = 0;
+        public void SubmitPosition() {
+            Console.WriteLine($"1: {Position[0]}, 2: {Position[1]}, 3: {Position[2]}, 4: {Position[3]}");
+        }
         public void UpdatePiece()
         {
             //HardDrop();
             Move();
-           // Rotate();
-            //Gravity();
+            Rotate();
+            Gravity();
+            //SubmitPosition();
         }
         private void Move(){
 
@@ -54,6 +62,7 @@ namespace Tetris{
 
             //CHANGE: Make this better and more concsise
             switch(currentState){
+                //* Determine the action the player is trying to execute based on the current state
                     case ControlState.Inactive:
                        //Key press
                        Shift(moveDirection);
@@ -90,6 +99,7 @@ namespace Tetris{
 
         private int CheckMoveInput()
         {
+            //* Figure out the direction of the input
             KeyboardState kState = Keyboard.GetState();
             int dir = 0;
             if (kState.IsKeyDown(UserSettings.leftKey)) {
@@ -103,22 +113,68 @@ namespace Tetris{
             return dir;
         }
 
+        private int CheckRotateInput() {
+            KeyboardState kState = Keyboard.GetState();
+
+
+            int dir = 0;
+
+            if (kState.IsKeyDown(UserSettings.rotateLeftKey)) {
+                dir = -1;
+            }
+
+            if (kState.IsKeyDown(UserSettings.rotateRightKey)) {
+                dir = 1;
+            }
+
+
+
+            if (lastRotInput == dir) { return 0; }
+
+            lastRotInput = dir;
+            return dir;
+
+        }
         private void Shift(int direction){
+            //* Update the position of each mino to move the piece right
             for(int i = 0; i < Position.Length; i++){
                 Position[i].X += direction;
             }
         }
 
-        private bool CheckSide(int direction){
-
+        private void ShiftDown() {
+            for(int i = 0; i < Position.Length; i++) {
+                Position[i].Y -= 1;
+            }
+        }
+        private bool CheckDown(){
+            //* Determine if a specified side is clear to prevent the pieces from moving through walls and other pieces
             for(int i = 0; i < Position.Length; i++){
+                int nextYIndex = (int)Position[i].Y - 1;
+                int currentXPosition = (int)Position[i].X;
+
+
+                if(nextYIndex < 0) { return false;}
+                if(Board.BoardData[currentXPosition, nextYIndex] == true){
+                    return false;
+                }
+            }
+
+
+
+            return true;
+        }
+
+        private bool CheckSide(int direction) {
+            //* Determine if a specified side is clear to prevent the pieces from moving through walls and other pieces
+            for (int i = 0; i < Position.Length; i++) {
                 int nextXIndex = (int)Position[i].X + direction;
                 int currentYPosition = (int)Position[i].Y;
 
 
-                if(nextXIndex < 0) { return false;}
-                if(nextXIndex >= UserSettings.boardWidth) { return false;}
-                if(Board.BoardData[nextXIndex, currentYPosition] == true){
+                if (nextXIndex < 0) { return false; }
+                if (nextXIndex >= UserSettings.boardWidth) { return false; }
+                if (Board.BoardData[nextXIndex, currentYPosition] == true) {
                     return false;
                 }
             }
@@ -129,13 +185,77 @@ namespace Tetris{
         }
         //Work on these next
         private void Rotate(){
-            throw new NotImplementedException();
+
+
+            int rotDir = CheckRotateInput();
+
+            if (rotDir == 0) return;
+
+            int nextRotNum = currentRotation + rotDir;
+            if (nextRotNum < 0) nextRotNum = 3;
+            if (nextRotNum > 3) nextRotNum = 0;
+
+
+            //-----------------------------------------------------------------------------------------------------------------------------------------
+            //change this out to a switch statement based on what piece it is
+            PieceInfo nextRot = new PieceInfo();
+
+            nextRot.Info = Position;
+            nextRot.Combine(RotationData.dataI[currentRotation, nextRotNum]);
+            //---------------------------------------------------------------------------------------------------------------------------------------
+            //Same with this
+            for(int i = 0; i < RotationData.oDataI.Length; i++) {
+
+                //
+                Vector2 offset = RotationData.oDataI[currentRotation, i] - RotationData.oDataI[nextRotNum, i]; //wahh
+
+                PieceInfo offsetInfo = new PieceInfo(offset, offset, offset, offset);
+
+                PieceInfo rotationTest = nextRot;
+                rotationTest.Combine(offsetInfo);
+
+                if (CheckRotation(rotationTest)) {
+                    currentRotation = nextRotNum;
+
+                    Position = rotationTest.Info;
+                    return;
+                }
+
+
+            }
         }
         private void Gravity(){
-            if(!gravityFinished) { return;}
+            if(!gravityFinished) { ; return;}
 
-            Thread T = new Thread(() => Timer.Wait(GameState.gravitySpeed, ref arrWaiting));
+            int dropSpeed = 1000 / GameState.gravitySpeed; //Prob slow
 
+            Thread T = new Thread(() => Timer.Wait(dropSpeed, ref gravityFinished));
+            T.Start();
+
+            if (CheckDown()) {
+                ShiftDown();
+                return;
+            }
+
+            LockPiece();
+        }
+
+        private bool CheckRotation(PieceInfo nextRot) {
+            for(int i = 0; i < 4; i++) {
+
+                if ((int)nextRot.Info[i].X < 0) return false;
+                if ((int)nextRot.Info[i].Y < 0) return false;
+                if ((int)nextRot.Info[i].X > UserSettings.boardWidth) return false;
+                if ((int)nextRot.Info[i].Y > UserSettings.boardHeight) return false;
+                Console.WriteLine($"X: {(int)nextRot.Info[i].X}, Y: {(int)nextRot.Info[i].Y}");
+                //if (Board.BoardData[(int)nextRot.Info[i].X, (int)nextRot.Info[i].Y] == true) return false;
+            }
+
+            return true;
+        }
+
+        private void LockPiece() {
+            //throw new NotImplementedException();
         }
 
         private void HardDrop()
